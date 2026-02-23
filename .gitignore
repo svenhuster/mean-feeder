@@ -1,0 +1,7 @@
+/target
+/data
+.direnv/
+.envrc
+entries.tsv
+noisy-entries.tsv
+result
