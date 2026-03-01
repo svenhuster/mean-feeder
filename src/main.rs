@@ -746,3 +746,319 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- days_since_epoch ---
+
+    #[test]
+    fn days_since_epoch_at_epoch() {
+        assert_eq!(days_since_epoch(1970, 1, 1), 0);
+    }
+
+    #[test]
+    fn days_since_epoch_leap_year() {
+        // 2000-02-29: 31 (Jan) + 29 (Feb 1-29) = 60 days into 2000
+        // From 1970 to 2000 = 10957 days, plus 59 more
+        assert_eq!(days_since_epoch(2000, 2, 29), 11016);
+    }
+
+    #[test]
+    fn days_since_epoch_known_date() {
+        // 2024-03-01
+        assert_eq!(days_since_epoch(2024, 3, 1), 19783);
+    }
+
+    // --- parse_tz_offset ---
+
+    #[test]
+    fn tz_offset_named_zones() {
+        assert_eq!(parse_tz_offset("GMT"), 0);
+        assert_eq!(parse_tz_offset("UTC"), 0);
+        assert_eq!(parse_tz_offset("UT"), 0);
+        assert_eq!(parse_tz_offset("Z"), 0);
+        assert_eq!(parse_tz_offset("EST"), -5 * 3600);
+        assert_eq!(parse_tz_offset("EDT"), -4 * 3600);
+        assert_eq!(parse_tz_offset("CST"), -6 * 3600);
+        assert_eq!(parse_tz_offset("CDT"), -5 * 3600);
+        assert_eq!(parse_tz_offset("MST"), -7 * 3600);
+        assert_eq!(parse_tz_offset("MDT"), -6 * 3600);
+        assert_eq!(parse_tz_offset("PST"), -8 * 3600);
+        assert_eq!(parse_tz_offset("PDT"), -7 * 3600);
+    }
+
+    #[test]
+    fn tz_offset_numeric() {
+        assert_eq!(parse_tz_offset("+0000"), 0);
+        assert_eq!(parse_tz_offset("+0530"), 5 * 3600 + 30 * 60);
+        assert_eq!(parse_tz_offset("-0500"), -(5 * 3600));
+    }
+
+    #[test]
+    fn tz_offset_unknown_defaults_to_zero() {
+        assert_eq!(parse_tz_offset("XYZ"), 0);
+        assert_eq!(parse_tz_offset(""), 0);
+    }
+
+    // --- parse_rfc3339 ---
+
+    #[test]
+    fn rfc3339_z_suffix() {
+        assert_eq!(parse_rfc3339("2024-01-15T10:30:00Z"), Some(1705314600));
+    }
+
+    #[test]
+    fn rfc3339_lowercase_z() {
+        assert_eq!(parse_rfc3339("2024-01-15T10:30:00z"), Some(1705314600));
+    }
+
+    #[test]
+    fn rfc3339_positive_offset() {
+        // +05:30 means local time is 5:30 ahead of UTC, so UTC = local - offset
+        assert_eq!(
+            parse_rfc3339("2024-01-15T10:30:00+05:30"),
+            Some(1705314600 - (5 * 3600 + 30 * 60))
+        );
+    }
+
+    #[test]
+    fn rfc3339_negative_offset() {
+        // -05:00 means local time is 5h behind UTC, so UTC = local + 5h
+        assert_eq!(
+            parse_rfc3339("2024-01-15T10:30:00-05:00"),
+            Some(1705314600 + 5 * 3600)
+        );
+    }
+
+    // --- parse_rfc2822 ---
+
+    #[test]
+    fn rfc2822_with_day_name() {
+        assert_eq!(
+            parse_rfc2822("Mon, 15 Jan 2024 10:30:00 +0000"),
+            Some(1705314600)
+        );
+    }
+
+    #[test]
+    fn rfc2822_without_day_name() {
+        assert_eq!(
+            parse_rfc2822("15 Jan 2024 10:30:00 +0000"),
+            Some(1705314600)
+        );
+    }
+
+    #[test]
+    fn rfc2822_named_timezone_est() {
+        // EST = -5h, so UTC = local - (-5h) = local + 5h
+        assert_eq!(
+            parse_rfc2822("15 Jan 2024 10:30:00 EST"),
+            Some(1705314600 + 5 * 3600)
+        );
+    }
+
+    #[test]
+    fn rfc2822_named_timezone_pst() {
+        // PST = -8h
+        assert_eq!(
+            parse_rfc2822("15 Jan 2024 10:30:00 PST"),
+            Some(1705314600 + 8 * 3600)
+        );
+    }
+
+    #[test]
+    fn rfc2822_month_abbreviations() {
+        // Just verify a few months parse without error
+        assert!(parse_rfc2822("1 Feb 2024 00:00:00 +0000").is_some());
+        assert!(parse_rfc2822("1 Jun 2024 00:00:00 +0000").is_some());
+        assert!(parse_rfc2822("1 Dec 2024 00:00:00 +0000").is_some());
+    }
+
+    // --- parse_timestamp (dispatch) ---
+
+    #[test]
+    fn parse_timestamp_dispatches_rfc3339() {
+        assert_eq!(parse_timestamp("2024-01-15T10:30:00Z"), Some(1705314600));
+    }
+
+    #[test]
+    fn parse_timestamp_dispatches_rfc2822() {
+        assert_eq!(
+            parse_timestamp("Mon, 15 Jan 2024 10:30:00 +0000"),
+            Some(1705314600)
+        );
+    }
+
+    #[test]
+    fn parse_timestamp_trims_whitespace() {
+        assert_eq!(
+            parse_timestamp("  2024-01-15T10:30:00Z  "),
+            Some(1705314600)
+        );
+    }
+
+    // --- parse_feed: RSS ---
+
+    #[test]
+    fn parse_feed_rss() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Test Feed</title>
+    <item>
+      <title>Test Item</title>
+      <link>https://example.com/1</link>
+      <guid>item-1</guid>
+      <pubDate>Mon, 15 Jan 2024 10:30:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>"#;
+        let (title, entries) = parse_feed(xml);
+        assert_eq!(title, "Test Feed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, "Test Item");
+        assert_eq!(entries[0].link, "https://example.com/1");
+        assert_eq!(entries[0].id, "item-1");
+        assert_eq!(entries[0].published.as_deref(), Some("Mon, 15 Jan 2024 10:30:00 +0000"));
+    }
+
+    // --- parse_feed: Atom ---
+
+    #[test]
+    fn parse_feed_atom() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Test Atom Feed</title>
+  <entry>
+    <title>Atom Entry</title>
+    <link href="https://example.com/atom/1"/>
+    <id>atom-1</id>
+    <published>2024-01-15T10:30:00Z</published>
+  </entry>
+</feed>"#;
+        let (title, entries) = parse_feed(xml);
+        assert_eq!(title, "Test Atom Feed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, "Atom Entry");
+        assert_eq!(entries[0].link, "https://example.com/atom/1");
+        assert_eq!(entries[0].id, "atom-1");
+        assert_eq!(entries[0].published.as_deref(), Some("2024-01-15T10:30:00Z"));
+    }
+
+    // --- parse_feed: missing fields ---
+
+    #[test]
+    fn parse_feed_missing_fields() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sparse Feed</title>
+    <item>
+      <link>https://example.com/no-title</link>
+    </item>
+  </channel>
+</rss>"#;
+        let (title, entries) = parse_feed(xml);
+        assert_eq!(title, "Sparse Feed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, "");
+        assert_eq!(entries[0].id, "");
+        assert_eq!(entries[0].link, "https://example.com/no-title");
+        assert!(entries[0].published.is_none());
+    }
+
+    // --- parse_feed: CDATA ---
+
+    #[test]
+    fn parse_feed_cdata() {
+        let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>CDATA Feed</title>
+    <item>
+      <title><![CDATA[CDATA Title]]></title>
+      <link>https://example.com/cdata</link>
+      <guid>cdata-1</guid>
+      <description><![CDATA[<p>HTML content</p>]]></description>
+    </item>
+  </channel>
+</rss>"#;
+        let (title, entries) = parse_feed(xml);
+        assert_eq!(title, "CDATA Feed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, "CDATA Title");
+        assert_eq!(entries[0].summary.as_deref(), Some("<p>HTML content</p>"));
+    }
+
+    // --- local_name ---
+
+    #[test]
+    fn local_name_without_prefix() {
+        assert_eq!(local_name(b"title"), b"title");
+    }
+
+    #[test]
+    fn local_name_with_prefix() {
+        assert_eq!(local_name(b"dc:creator"), b"creator");
+    }
+
+    // --- format_relative ---
+
+    #[test]
+    fn format_relative_just_now() {
+        assert_eq!(format_relative(1000, 1000), "just now");
+        assert_eq!(format_relative(1000, 970), "just now");
+    }
+
+    #[test]
+    fn format_relative_minutes() {
+        assert_eq!(format_relative(1000, 700), "5m ago");
+    }
+
+    #[test]
+    fn format_relative_hours() {
+        assert_eq!(format_relative(10000, 0), "2h ago");
+    }
+
+    #[test]
+    fn format_relative_days() {
+        assert_eq!(format_relative(100000, 0), "1d ago");
+    }
+
+    // --- strip_html ---
+
+    #[test]
+    fn strip_html_removes_tags() {
+        assert_eq!(strip_html("<p>Hello <b>world</b></p>"), "Hello world");
+    }
+
+    #[test]
+    fn strip_html_decodes_entities() {
+        assert_eq!(strip_html("foo &amp; bar"), "foo & bar");
+    }
+
+    // --- decode_entities ---
+
+    #[test]
+    fn decode_entities_all() {
+        assert_eq!(decode_entities("&amp;"), "&");
+        assert_eq!(decode_entities("&lt;"), "<");
+        assert_eq!(decode_entities("&gt;"), ">");
+        assert_eq!(decode_entities("&quot;"), "\"");
+        assert_eq!(decode_entities("&#39;"), "'");
+        assert_eq!(decode_entities("&apos;"), "'");
+        assert_eq!(decode_entities("&#x27;"), "'");
+        assert_eq!(decode_entities("&nbsp;"), " ");
+    }
+
+    // --- escape_html ---
+
+    #[test]
+    fn escape_html_special_chars() {
+        assert_eq!(escape_html("a & b"), "a &amp; b");
+        assert_eq!(escape_html("<tag>"), "&lt;tag&gt;");
+        assert_eq!(escape_html("say \"hi\""), "say &quot;hi&quot;");
+    }
+}
