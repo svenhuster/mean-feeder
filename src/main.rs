@@ -6,14 +6,6 @@ use std::net::TcpListener;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const DEFAULT_FEEDS: &[&str] = &[
-    "https://lobste.rs/rss",
-];
-
-const DEFAULT_NOISY_FEEDS: &[&str] = &[
-    "https://hnrss.org/frontpage",
-];
-
 const DATA_FILE: &str = "entries.tsv";
 const NOISY_DATA_FILE: &str = "noisy-entries.tsv";
 
@@ -48,15 +40,6 @@ fn load_feeds(env_var: &str) -> Vec<String> {
                 return feeds;
             }
         }
-    }
-    let defaults = match env_var {
-        "FEEDS_FILE" => DEFAULT_FEEDS,
-        "NOISY_FEEDS_FILE" => DEFAULT_NOISY_FEEDS,
-        _ => return Vec::new(),
-    };
-    if !defaults.is_empty() {
-        eprintln!("Using {} default {env_var} feeds", defaults.len());
-        return defaults.iter().map(|s| s.to_string()).collect();
     }
     Vec::new()
 }
