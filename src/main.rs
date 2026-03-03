@@ -478,13 +478,20 @@ fn decode_entities(s: &str) -> String {
 }
 
 fn fetch_and_save(agent: &ureq::Agent, feeds: &[String], data_file: &str) -> Vec<Entry> {
-    let mut all_entries = Vec::new();
-
-    for url in feeds {
-        let entries = fetch_feed(agent, url);
-        eprintln!("Fetched {} entries from {url}", entries.len());
-        all_entries.extend(entries);
-    }
+    let results: Vec<Vec<Entry>> = std::thread::scope(|s| {
+        let handles: Vec<_> = feeds
+            .iter()
+            .map(|url| {
+                s.spawn(move || {
+                    let entries = fetch_feed(agent, url);
+                    eprintln!("Fetched {} entries from {url}", entries.len());
+                    entries
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let all_entries: Vec<Entry> = results.into_iter().flatten().collect();
 
     let mut seen = HashMap::new();
     let mut deduped = Vec::new();
