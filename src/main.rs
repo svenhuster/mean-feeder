@@ -431,8 +431,9 @@ fn fetch_feed(agent: &ureq::Agent, url: &str) -> Vec<Entry> {
                 .map(|s| {
                     let stripped = strip_html(&s).trim().to_string();
                     let twoline: String = stripped.lines().take(2).collect::<Vec<_>>().join(" ");
-                    if twoline.len() > 200 {
-                        format!("{}...", &twoline[..200])
+                    if twoline.chars().count() > 200 {
+                        let truncated: String = twoline.chars().take(200).collect();
+                        format!("{truncated}...")
                     } else {
                         twoline
                     }
