@@ -701,12 +701,12 @@ fn escape_html(s: &str) -> String {
 /// Handle incoming connection. We deliberetly do not parse the request as this
 /// is a local-first personal project.
 fn handle_connection(mut stream: std::net::TcpStream, state: &SharedState) {
-    let mut buf = [0u8; 1024];
+    let mut buf = [0u8; 4096];
     let _ = stream.read(&mut buf);
     let feed_state = state.read().unwrap();
     let body = render_page(&feed_state.main, &feed_state.noisy);
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
         body.len(),
         body
     );
