@@ -17,7 +17,10 @@ fn utc_fetch_hour() -> u64 {
 }
 
 fn secs_until_fetch() -> u64 {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let today_secs = now % 86400;
     let target = utc_fetch_hour() * 3600;
     if today_secs < target {
@@ -83,7 +86,11 @@ fn load_entries(data_file: &str) -> Vec<Entry> {
                 link: f[2].to_string(),
                 published: f[3].parse::<i64>().ok(),
                 feed_title: f[4].to_string(),
-                summary: if f[5].is_empty() { None } else { Some(f[5].to_string()) },
+                summary: if f[5].is_empty() {
+                    None
+                } else {
+                    Some(f[5].to_string())
+                },
             })
         })
         .collect()
@@ -161,9 +168,18 @@ fn parse_rfc2822(s: &str) -> Option<i64> {
 
     let day: i64 = parts[0].parse().ok()?;
     let month = match parts[1].to_ascii_lowercase().as_str() {
-        "jan" => 1, "feb" => 2, "mar" => 3, "apr" => 4,
-        "may" => 5, "jun" => 6, "jul" => 7, "aug" => 8,
-        "sep" => 9, "oct" => 10, "nov" => 11, "dec" => 12,
+        "jan" => 1,
+        "feb" => 2,
+        "mar" => 3,
+        "apr" => 4,
+        "may" => 5,
+        "jun" => 6,
+        "jul" => 7,
+        "aug" => 8,
+        "sep" => 9,
+        "oct" => 10,
+        "nov" => 11,
+        "dec" => 12,
         _ => return None,
     };
     let year: i64 = parts[2].parse().ok()?;
@@ -189,10 +205,14 @@ fn parse_rfc2822(s: &str) -> Option<i64> {
 fn parse_tz_offset(s: &str) -> i64 {
     match s {
         "GMT" | "UTC" | "UT" | "Z" => 0,
-        "EST" => -5 * 3600, "EDT" => -4 * 3600,
-        "CST" => -6 * 3600, "CDT" => -5 * 3600,
-        "MST" => -7 * 3600, "MDT" => -6 * 3600,
-        "PST" => -8 * 3600, "PDT" => -7 * 3600,
+        "EST" => -5 * 3600,
+        "EDT" => -4 * 3600,
+        "CST" => -6 * 3600,
+        "CDT" => -5 * 3600,
+        "MST" => -7 * 3600,
+        "MDT" => -6 * 3600,
+        "PST" => -8 * 3600,
+        "PDT" => -7 * 3600,
         _ => {
             if s.len() >= 5 && (s.starts_with('+') || s.starts_with('-')) {
                 let sign: i64 = if s.starts_with('-') { -1 } else { 1 };
@@ -556,33 +576,16 @@ fn render_entries(html: &mut String, entries: &[Entry], now: i64, page_size: Opt
 
 fn render_page(main_entries: &[Entry], noisy_entries: &[Entry]) -> String {
     let mut html = String::from(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mean-feeder</title>
-<style>
-  body { max-width: 800px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; background: #fafafa; color: #222; }
-  .entry { margin-bottom: 0.5rem; }
-  .header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-  .header a { color: #1a0dab; text-decoration: none; }
-  .header a:visited { color: #609; }
-  .header a:hover { text-decoration: underline; }
-  .meta { color: #888; font-size: 0.8rem; white-space: nowrap; text-align: right; }
-  @media (max-width: 600px) {
-    .header { flex-direction: column; align-items: flex-start; gap: 0; }
-    .meta { text-align: left; white-space: normal; }
-  }
-  .summary { color: #555; font-size: 0.85rem; line-height: 1.3; margin-top: 0.15rem; }
-  .empty { color: #888; font-style: italic; }
-  .section-separator { border: none; border-top: 1px solid #ddd; margin: 2rem 0 1.5rem; }
-  .section-heading { color: #888; font-size: 0.85rem; font-weight: normal; }
-</style>
-</head>
-<body>
-"#,
+        "<!DOCTYPE html>\n\
+         <html lang=\"en\">\n\
+         <head>\n\
+         <meta charset=\"utf-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
+         <title>mean-feeder</title>\n\
+         <style>\n",
     );
+    html.push_str(include_str!("style.css"));
+    html.push_str("</style>\n</head>\n<body>\n");
 
     if main_entries.is_empty() && noisy_entries.is_empty() {
         html.push_str("<p class=\"empty\">No entries yet. Feeds are being fetched...</p>");
@@ -606,61 +609,9 @@ fn render_page(main_entries: &[Entry], noisy_entries: &[Entry]) -> String {
             html.push_str("<div id=\"noisy-pager\"></div>\n");
         }
 
-        html.push_str(
-            r##"<script>
-(function(){
-  function parseHash() {
-    var h = {};
-    location.hash.replace(/^#/,'').split('&').forEach(function(s){
-      var p = s.split('='); if (p.length===2) h[p[0]] = parseInt(p[1],10)||1;
-    });
-    return h;
-  }
-  function setHash(h) {
-    var parts = [];
-    for (var k in h) parts.push(k+'='+h[k]);
-    location.hash = parts.join('&');
-  }
-  function paginate(containerId, pagerId, hashKey) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-    var pages = container.querySelectorAll('.page');
-    if (!pages.length) return;
-    var total = pages.length;
-    function show(p) {
-      p = Math.max(1, Math.min(p, total));
-      for (var i = 0; i < pages.length; i++)
-        pages[i].style.display = (i === p - 1) ? '' : 'none';
-      var h = parseHash(); h[hashKey] = p; setHash(h);
-      var pager = document.getElementById(pagerId);
-      pager.innerHTML = '';
-      if (p > 1) {
-        var prev = document.createElement('a');
-        prev.href = '#'; prev.textContent = '\u2190 Prev';
-        prev.onclick = function(e){ e.preventDefault(); show(p - 1); };
-        pager.appendChild(prev);
-      }
-      if (total > 1) {
-        var span = document.createElement('span');
-        span.textContent = ' Page ' + p + ' of ' + total + ' ';
-        pager.appendChild(span);
-      }
-      if (p < total) {
-        var next = document.createElement('a');
-        next.href = '#'; next.textContent = 'Next \u2192';
-        next.onclick = function(e){ e.preventDefault(); show(p + 1); };
-        pager.appendChild(next);
-      }
-    }
-    show(parseHash()[hashKey] || 1);
-    window.addEventListener('hashchange', function(){ show(parseHash()[hashKey] || 1); });
-  }
-  paginate('main-entries','pager','page');
-  paginate('noisy-entries','noisy-pager','noisy');
-})();
-</script>
-"##,
-        );
+        html.push_str("<script>");
+        html.push_str(include_str!("paginate.js"));
+        html.push_str("</script>");
     }
 
     html.push_str("</body>\n</html>");
@@ -731,21 +682,20 @@ fn main() {
     // Background fetcher thread
     let bg_state = state.clone();
     std::thread::spawn(move || {
-        refresh_all(&bg_state, &main_feeds, &noisy_feeds);
         loop {
+            eprintln!("Refreshing feeds...");
+            refresh_all(&bg_state, &main_feeds, &noisy_feeds);
             let wait = secs_until_fetch();
             eprintln!("Next fetch in {wait}s (at {:02}:00 UTC)", utc_fetch_hour());
             std::thread::sleep(std::time::Duration::from_secs(wait));
-            eprintln!("Refreshing feeds...");
-            refresh_all(&bg_state, &main_feeds, &noisy_feeds);
         }
     });
 
     // HTTP server on main thread
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3102".to_string());
+    let port = std::env::var("PORT").expect("env var PORT needs to be set");
     let addr = format!("0.0.0.0:{port}");
     let listener = TcpListener::bind(&addr).unwrap();
-    eprintln!("Listening on http://localhost:{port}");
+    eprintln!("Listening on port: {port}");
 
     for stream in listener.incoming() {
         match stream {
@@ -929,7 +879,10 @@ mod tests {
         assert_eq!(entries[0].title, "Test Item");
         assert_eq!(entries[0].link, "https://example.com/1");
         assert_eq!(entries[0].id, "item-1");
-        assert_eq!(entries[0].published.as_deref(), Some("Mon, 15 Jan 2024 10:30:00 +0000"));
+        assert_eq!(
+            entries[0].published.as_deref(),
+            Some("Mon, 15 Jan 2024 10:30:00 +0000")
+        );
     }
 
     // --- parse_feed: Atom ---
@@ -952,7 +905,10 @@ mod tests {
         assert_eq!(entries[0].title, "Atom Entry");
         assert_eq!(entries[0].link, "https://example.com/atom/1");
         assert_eq!(entries[0].id, "atom-1");
-        assert_eq!(entries[0].published.as_deref(), Some("2024-01-15T10:30:00Z"));
+        assert_eq!(
+            entries[0].published.as_deref(),
+            Some("2024-01-15T10:30:00Z")
+        );
     }
 
     // --- parse_feed: missing fields ---

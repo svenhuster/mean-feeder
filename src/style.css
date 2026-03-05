@@ -1,0 +1,15 @@
+  body { max-width: 800px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; background: #fafafa; color: #222; }
+  .entry { margin-bottom: 0.5rem; }
+  .header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .header a { color: #1a0dab; text-decoration: none; }
+  .header a:visited { color: #609; }
+  .header a:hover { text-decoration: underline; }
+  .meta { color: #888; font-size: 0.8rem; white-space: nowrap; text-align: right; }
+  @media (max-width: 600px) {
+    .header { flex-direction: column; align-items: flex-start; gap: 0; }
+    .meta { text-align: left; white-space: normal; }
+  }
+  .summary { color: #555; font-size: 0.85rem; line-height: 1.3; margin-top: 0.15rem; }
+  .empty { color: #888; font-style: italic; }
+  .section-separator { border: none; border-top: 1px solid #ddd; margin: 2rem 0 1.5rem; }
+  .section-heading { color: #888; font-size: 0.85rem; font-weight: normal; }
